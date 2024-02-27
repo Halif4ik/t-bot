@@ -1,6 +1,6 @@
 import {Markup, session, Telegraf} from 'telegraf';
 import {ConfigService} from "./config/config.service";
-import {ICtxInterface} from "./ctx.interface.js";
+import {ICtxInterface, SessionData} from "./ctx.interface.js";
 
 const configService: ConfigService = new ConfigService();
 const bot: Telegraf<ICtxInterface> = new Telegraf(configService.get('MY_TOKEN'), {});
@@ -10,21 +10,24 @@ bot.use(session())
 bot.use(async (ctx: ICtxInterface, next): Promise<void> => {
    try {
       if (ctx.from && ctx.message && ctx.chat) {
-         const botForwMassID = await ctx.telegram.forwardMessage(configService.get('CHAT_ID'), ctx.from.id,
+
+         const botForwardedMassage = await ctx.telegram.forwardMessage(configService.get('CHAT_ID'), ctx.from.id,
              ctx.message.message_id);
+
+         const origUserText = (botForwardedMassage as any)['text'];
 
          if (!ctx.session) ctx.session = {
             CTAButton: {other: false},
             messageFromUserInfo: {
-               chatId: ctx.chat.id ?? 0,
-               messageId: 0
+               chatId: ctx.chat.id,
+               messageId: 0,
+               messageText: origUserText ?? ''
             },
             buttonMessageId: 0,
-            botForwardedMessageId: botForwMassID.message_id,
+            botForwardedMessageId: botForwardedMassage.message_id,
          };
-         ctx.session.botForwardedMessageId = botForwMassID.message_id,
+         ctx.session.botForwardedMessageId = botForwardedMassage.message_id;
 
-             console.log('Message forwarded successfully');
       } else {
          console.log('ctx.from and ctx.message is undefined');
       }
@@ -40,18 +43,18 @@ bot.on('text', async (ctx: ICtxInterface): Promise<void> => {
       console.error('Chat id or message id is undefined');
       return;
    }
+   const currentSession: SessionData = ctx.session;
 
-   ctx.session.messageFromUserInfo = {
-      chatId: ctx.chat.id,
-      messageId: ctx.message.message_id
-   };
+   currentSession.messageFromUserInfo.messageId = ctx.message.message_id;
+
    const keyboardMarkup = Markup.inlineKeyboard([
       Markup.button.callback('Other', 'other'),
       Markup.button.callback('Add', 'add')
    ]);
 
-   const message = await ctx.reply('Vars answer', keyboardMarkup);
-   ctx.session.buttonMessageId = message.message_id;
+   const message = await ctx.reply(currentSession.messageFromUserInfo.messageText,
+       keyboardMarkup);
+   currentSession.buttonMessageId = message.message_id;
 });
 
 // Handle button actions Clear all messages in the chat

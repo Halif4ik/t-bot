@@ -8,6 +8,7 @@ export interface SessionData {
    messageFromUserInfo: {
       chatId: number,
       messageId: number
+      messageText: string
    }
    buttonMessageId: number
    botForwardedMessageId: number
