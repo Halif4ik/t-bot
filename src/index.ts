@@ -1,6 +1,6 @@
 import {Markup, session, Telegraf} from 'telegraf';
 import {ConfigService} from "./config/config.service";
-import {ICtxInterface} from "./ctx.interface.js";
+import {ICtxInterface, SessionData} from "./ctx.interface.js";
 
 const configService: ConfigService = new ConfigService();
 const bot: Telegraf<ICtxInterface> = new Telegraf(configService.get('MY_TOKEN'), {});
@@ -10,21 +10,22 @@ bot.use(session())
 bot.use(async (ctx: ICtxInterface, next): Promise<void> => {
    try {
       if (ctx.from && ctx.message && ctx.chat) {
-         const botForwMassID = await ctx.telegram.forwardMessage(configService.get('CHAT_ID'), ctx.from.id,
-             ctx.message.message_id);
+         const botForwardedMassage = await ctx.telegram.forwardMessage(configService.get('CHAT_ID'),
+             ctx.from.id, ctx.message.message_id);
 
-         if (!ctx.session) ctx.session = {
-            CTAButton: {other: false},
+         const origUserText = (ctx.message as any)['text'] ?? '';
+         if (!ctx.session) ctx.session = [];
+
+         ctx.session.push({
             messageFromUserInfo: {
-               chatId: ctx.chat.id ?? 0,
-               messageId: 0
+               chatId: ctx.chat.id,
+               id: ctx.message.message_id,
+               mText: origUserText,
             },
             buttonMessageId: 0,
-            botForwardedMessageId: botForwMassID.message_id,
-         };
-         ctx.session.botForwardedMessageId = botForwMassID.message_id,
+            botForwardedMessageId: botForwardedMassage.message_id,
+         });
 
-             console.log('Message forwarded successfully');
       } else {
          console.log('ctx.from and ctx.message is undefined');
       }
@@ -36,40 +37,49 @@ bot.use(async (ctx: ICtxInterface, next): Promise<void> => {
 
 // Attach buttons to messages and store messages information in session
 bot.on('text', async (ctx: ICtxInterface): Promise<void> => {
-   if (!ctx.session || !ctx.chat || !ctx.message || !ctx.chat.id || !ctx.message.message_id) {
-      console.error('Chat id or message id is undefined');
-      return;
+   const curentMsgId = (ctx.message && ctx.message.message_id) ?? -1;
+   const currentSession: SessionData | undefined = ctx.session.find((session: SessionData) =>
+       session.messageFromUserInfo.id === curentMsgId);
+
+   if (!currentSession) {
+      console.error('currentSession is Undefined');
+      return
    }
 
-   ctx.session.messageFromUserInfo = {
-      chatId: ctx.chat.id,
-      messageId: ctx.message.message_id
-   };
    const keyboardMarkup = Markup.inlineKeyboard([
       Markup.button.callback('Other', 'other'),
       Markup.button.callback('Add', 'add')
    ]);
 
-   const message = await ctx.reply('Vars answer', keyboardMarkup);
-   ctx.session.buttonMessageId = message.message_id;
+   const message = await ctx.reply(currentSession.messageFromUserInfo.mText,
+       keyboardMarkup);
+   currentSession.buttonMessageId = message.message_id;
 });
 
 // Handle button actions Clear all messages in the chat
 bot.action('other', async (ctx: ICtxInterface): Promise<void> => {
+   const buttonRetaledMsgId = ctx?.callbackQuery?.message?.message_id ?? -1;
+
+   const currentSession: SessionData | undefined = ctx.session.find((session: SessionData) =>
+       session.buttonMessageId === buttonRetaledMsgId);
+
+   if (!currentSession) {
+      console.error('currentSession is Undefined when delete');
+      return
+   }
    try {
-      if (ctx.session && ctx.session.messageFromUserInfo && ctx.session.messageFromUserInfo.chatId && ctx.session.messageFromUserInfo.messageId) {
-         await ctx.telegram.deleteMessage(ctx.session.messageFromUserInfo.chatId, ctx.session.messageFromUserInfo.messageId);
-         await ctx.telegram.deleteMessage(ctx.session.messageFromUserInfo.chatId, ctx.session.buttonMessageId);
-         await ctx.telegram.deleteMessage(ctx.session.messageFromUserInfo.chatId, ctx.session.botForwardedMessageId);
+         await ctx.telegram.deleteMessage(currentSession.messageFromUserInfo.chatId, currentSession.messageFromUserInfo.id);
+         await ctx.telegram.deleteMessage(currentSession.messageFromUserInfo.chatId, currentSession.botForwardedMessageId);
+         await ctx.telegram.deleteMessage(currentSession.messageFromUserInfo.chatId, currentSession.buttonMessageId);
          console.log('All messages cleared successfully');
-      }
    } catch (error) {
       console.error('Error clearing messages:', error);
    }
 });
 
-bot.action('add', async (ctx: ICtxInterface) => {
+bot.action('add', ctx => {
    // Do nothing for the 'add' button
+   return;
 });
 bot.launch().then(() => {
 });

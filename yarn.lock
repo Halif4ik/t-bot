@@ -290,13 +290,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"commander@npm:^12.0.0":
-  version: 12.0.0
-  resolution: "commander@npm:12.0.0"
-  checksum: bce9e243dc008baba6b8d923f95b251ad115e6e7551a15838d7568abebcca0fc832da1800cf37caf37852f35ce4b7fb794ba7a4824b88c5adb1395f9268642df
-  languageName: node
-  linkType: hard
-
 "concat-map@npm:0.0.1":
   version: 0.0.1
   resolution: "concat-map@npm:0.0.1"
@@ -1128,7 +1121,6 @@ __metadata:
   dependencies:
     "@types/dotenv": ^8.2.0
     "@types/node": ^20.11.20
-    commander: ^12.0.0
     dotenv: ^16.4.5
     nodemon: ^3.1.0
     telegraf: ^4.16.2
